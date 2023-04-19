@@ -2,6 +2,7 @@ import numpy as np
 from numpy.fft import rfft, irfft, fft, ifft
 import scipy.signal as sig
 
+from pycbc.waveform import get_fd_waveform
 from pycbc.filter import sigma, match, matched_filter
 
 class WFEnv():
@@ -11,6 +12,7 @@ class WFEnv():
         self.tlen = tlen
         self.srate = sample_rate
         self.Nsamp = tlen*sample_rate
+        self.fNsamp = 1+tlen*sample_rate//2
 
         self.times = np.arange(self.Nsamp)/self.srate
 
@@ -48,3 +50,11 @@ class WFEnv():
         """Aligns template to waveform and tries to scale to same amplitude"""
         aligned = self.align(template, waveform)
         return aligned/self.match(template, waveform)
+    def template(self, mtot, q, chi, approximant='IMRPhenomXAS'):
+        m1, m2 = mtot * q / (1+q), mtot / (1+q)
+        hp_fd, _ = get_fd_waveform(approximant=approximant,
+                                    mass1=m1, mass2=m2,
+                                    spin1z=chi, spin2z=chi,
+                                    delta_f=1/self.tlen, f_lower=self.low_freq_cutoff)
+        hp_fd.resize(self.fNsamp)
+        return hp_fd

@@ -3,7 +3,7 @@ from scipy import interpolate
 
 from pycbc.types import TimeSeries
 from pycbc.waveform.utils import taper_timeseries
-from nrinjrevamp.nr_eob_ub.sim import NRsim
+from nr_eob_ub.sim.NRsim import NRsim
 
 import spherical
 import quaternionic
