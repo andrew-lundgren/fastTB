@@ -56,7 +56,7 @@ class NRInjections():
         time = (nrsim.get_mode(self.modes[0], tp='h')).time
         return np.array((time, output.real, -output.imag)).T
     
-    def nr_td_waveform(self, nrsim, mtotal, theta, phi, distance):
+    def asc_waveform(self, nrsim, mtotal, theta, phi, distance):
         try:
             data = self._nr_waveform(nrsim, theta, phi)
         except AttributeError:
@@ -77,3 +77,32 @@ class NRInjections():
         hp.resize(self.Nsamp)
         idx = np.abs(hp.data).argmax()
         return hp.cyclic_time_shift(self.tlen-1.-idx/self.srate)
+    def h5_waveform(self, h5f, mtotal, theta, phi, distance):
+        mfac = MTSUN_SI*mtotal
+        delta_t = 1/self.srate
+        R = quaternionic.array.from_spherical_coordinates(theta, phi)
+        Y = self.wigner.sYlm(-2,R)
+        scale = (MRSUN_SI*mtotal)/(MPC_SI*distance)
+        
+        times = np.array(h5f['NRTimes'])
+        X0 = times[0]
+        endtime = mfac*(times[-1] - X0)
+        
+        sample_times = np.arange(0, endtime, delta_t)
+        def interp(data):
+            x = mfac*(np.array(data['X']) - X0)
+            y = np.array(data['Y'])
+            return interp1d(x, y)(sample_times)
+        def mode_interp(ell, m):
+            amp = interp(h5f[f"amp_l{ell}_m{m}"])
+            phase = interp(h5f[f"phase_l{ell}_m{m}"])
+            return amp*np.exp(1.j*phase)
+
+        output = 0.
+        for mode in self.modes:
+            output += mode_interp(*mode) * Y[self.wigner.Yindex(*mode)]
+        idx = np.abs(output).argmax()
+        
+        hp = TimeSeries(scale*output.real, delta_t=delta_t)
+        hp.resize(self.Nsamp)
+        return hp.cyclic_time_shift(self.tlen-1.-delta_t*idx)
