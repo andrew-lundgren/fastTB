@@ -3,7 +3,10 @@ from scipy import interpolate
 
 from pycbc.types import TimeSeries
 from pycbc.waveform.utils import taper_timeseries
-from nr_eob_ub.sim.NRsim import NRsim
+try:
+    from nr_eob_ub.sim.NRsim import NRsim
+except ModuleNotFoundError:
+    print('ICCUB NR sims module not found')
 
 import spherical
 import quaternionic
