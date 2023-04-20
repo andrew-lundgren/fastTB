@@ -1,5 +1,5 @@
 import numpy as np
-from scipy import interpolate
+from scipy.interpolate import interp1d
 
 from pycbc.types import TimeSeries
 from pycbc.waveform.utils import taper_timeseries
@@ -70,7 +70,7 @@ class NRInjections():
         delta_t = 1/self.srate
 
         sample_times = np.arange(0, endtime, delta_t)
-        func1 = interpolate.interp1d(times, data[:,1])
+        func1 = interp1d(times, data[:,1])
 
         scale = (MRSUN_SI*mtotal)/(MPC_SI*distance)
         hp = TimeSeries(scale*func1(sample_times), delta_t=delta_t)
