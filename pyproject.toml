@@ -16,7 +16,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "numpy", "scipy", "pandas", "pycbc", "quaternion", "spherical", "h5py"
+    "numpy", "scipy", "pandas", "pycbc", "quaternion", "spherical", "h5py", "joblib"
 ]
 
 [tool.setuptools.package-data]

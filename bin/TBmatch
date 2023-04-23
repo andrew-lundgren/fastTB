@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-import sys
-sys.path.append('./nr_eob-main/')
-
 import numpy as np
 from scipy.optimize import minimize
 import pandas as pd
@@ -9,11 +6,7 @@ import pandas as pd
 from itertools import product
 from joblib import Parallel, delayed
 
-import nr_eob_ub.cf.general.info as info
 from nr_eob_ub.sim.NRsim import NRsim
-
-from metadata import metadata_dJ as mdJ
-from metadata import to_path
 
 from pycbc.psd.analytical import aLIGOaLIGOO3LowT1800545
 
