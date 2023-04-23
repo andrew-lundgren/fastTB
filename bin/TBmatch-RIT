@@ -1,0 +1,95 @@
+#!/usr/bin/env python
+import numpy as np
+from scipy.optimize import minimize
+import pandas as pd
+
+from itertools import product
+from joblib import Parallel, delayed
+import h5py
+
+from pycbc.psd.analytical import aLIGOaLIGOO3LowT1800545
+
+import fastTB
+
+import argparse
+parser = argparse.ArgumentParser(
+                    prog='fastTB',
+                    description='Fast CBC match calculations')
+parser.add_argument('--njobs', type=int)
+parser.add_argument('--tlen', default=16, type=int)
+parser.add_argument('--srate', default=2048, type=int)
+parser.add_argument('--flower', default=18., type=float)
+
+args = parser.parse_args()
+
+tlen = args.tlen
+srate = args.srate
+f_lower = args.flower
+fNsamp = 1 + tlen*srate//2
+
+nrinj = fastTB.NRInjections(tlen, srate)
+nrinj.set_modes([(2,2),(2,0),(2,-2), (3,3), (3,2), (3,-3), (3,-2)])
+wfenv = fastTB.WFEnv(tlen, srate, aLIGOaLIGOO3LowT1800545, f_lower)
+
+bounds = ((0.5,3.), (1.,10.), (-0.99, 0.99))
+
+def make_nr(path, mtotal):
+    h5f = h5py.File(path, 'r')
+    return nrinj.h5_waveform(h5f, mtotal, 0., 0., 1000.)
+
+def make_goal(wfnr, nrmtot, inv=False):
+    def goal(vec):
+        mfac, q, chi = vec
+        tmplt = wfenv.template(nrmtot*mfac, q, chi)
+        if inv:
+            return -wfenv.match(tmplt, wfnr)
+        else:
+            return wfenv.match(tmplt, wfnr)
+    return goal
+
+def make_bank():
+    return list(product(*[np.linspace(*bnd, 11) for bnd in bounds]))
+
+bank = make_bank()
+
+from glob import glob
+from os.path import split, expanduser
+simglob = expanduser("~ruxandra.bondarescu/src/eccentricity/simulations/*.h5")
+wflst = []
+for line in sorted(glob(simglob)):
+    path, fname = split(line)
+    tag = fname.rstrip('.h5').split('_')[1]
+    wflst.append((line, tag))
+    
+nrmtots = [60, 120, 240]
+
+simlst = []
+for siminf in wflst:
+    for nrmtot in nrmtots:
+        simlst.append((*siminf, nrmtot))
+
+#from tqdm import tqdm
+
+def process(path, tag, nrmtot):
+    wfnr = make_nr(path, nrmtot)
+    match_func = make_goal(wfnr, nrmtot)
+    matches = np.array([match_func(line) for line in bank])
+    idx = matches.argmax()
+
+    minim = minimize(make_goal(wfnr, nrmtot, inv=True),
+                    bank[idx],
+                    bounds= ((0.5,3.), (1.,10.), (-0.99, 0.99)),
+                    method='Nelder-Mead',
+                    options={'maxiter': 1000, 'disp': False})
+
+    mfac, q, chi = minim['x']
+    snr = wfenv.snr(wfnr)
+    match, tt = wfenv.match(wfenv.template(mfac*nrmtot, q, chi), wfnr, return_time=True)
+    return np.array((mfac, q, chi, tt, snr, -minim['fun']))
+
+results = Parallel(n_jobs=args.njobs, verbose=10)(delayed(process)(*arg) for arg in simlst)
+#results = [process(*arg) for arg in simlst]
+
+df = pd.DataFrame([(sim[1], sim[2], *res) for sim, res in zip(simlst, results)],
+                        columns=['tag', 'mtotal', 'mfac', 'q', 'chi', 'time', 'snr', 'match'])
+df.to_csv(f"matches/matches_RIT.csv", index=False)
