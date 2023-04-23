@@ -58,3 +58,11 @@ class WFEnv():
                                     delta_f=1/self.tlen, f_lower=self.low_freq_cutoff)
         hp_fd.resize(self.fNsamp)
         return hp_fd
+    def hp_template(self, mtot, q, chi, hp_fac, approximant='IMRPhenomXAS'):
+        """hp_fac is the highpass factor. 1 will highpass at 7200/mtotal Hz"""
+        tmplt = self.template(mtot, q, chi, approximant=approximant)
+        filt = sig.firwin(self.srate//4-1, [hp_fac*7200./mtot], pass_zero=False,
+                            fs=self.srate, window='hann')
+        filt.resize(self.Nsamp)
+        ffilt = np.abs(rfft(filt))
+        return ffilt*tmplt
