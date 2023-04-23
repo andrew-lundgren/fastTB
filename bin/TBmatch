@@ -38,7 +38,7 @@ def make_nr(path, tag, mtotal):
     nrsim = NRsim(path, tag,
               lm = ((2,2), (2,0), (3,2), (3,3)),
               method='ffi')
-    return nrinj.nr_td_waveform(nrsim, mtotal, 0, 0, 1e3)
+    return nrinj.asc_waveform(nrsim, mtotal, 0, 0, 1e3)
 
 def make_goal(wfnr, nrmtot, inv=False):
     def goal(vec):
@@ -69,7 +69,6 @@ simlst = []
 for path, tag in wflst:
     for nrmtot in nrmtots:
         simlst.append((path, tag, nrmtot))
-simlst = simlst[:10]
 
 #from tqdm import tqdm
 
