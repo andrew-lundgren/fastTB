@@ -92,7 +92,7 @@ class NRInjections():
         def interp(data):
             x = mfac*(np.array(data['X']) - X0)
             y = np.array(data['Y'])
-            return interp1d(x, y)(sample_times)
+            return interp1d(x, y, bounds_error=False, fill_value=0.)(sample_times)
         def mode_interp(ell, m):
             amp = interp(h5f[f"amp_l{ell}_m{m}"])
             phase = interp(h5f[f"phase_l{ell}_m{m}"])
