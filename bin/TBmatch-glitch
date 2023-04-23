@@ -1,0 +1,87 @@
+#!/usr/bin/env python
+
+import numpy as np
+from scipy.optimize import minimize
+import pandas as pd
+
+from itertools import product
+from joblib import Parallel, delayed
+
+from pycbc.psd.analytical import aLIGOaLIGOO3LowT1800545
+from pycbc.types import FrequencySeries
+
+import fastTB
+
+import argparse
+parser = argparse.ArgumentParser(
+                    prog='fastTB',
+                    description='Fast CBC match calculations')
+parser.add_argument('--njobs', type=int)
+parser.add_argument('--tlen', default=16, type=int)
+parser.add_argument('--srate', default=4096, type=int)
+parser.add_argument('--flower', default=18., type=float)
+
+args = parser.parse_args()
+
+tlen = args.tlen
+srate = args.srate
+f_lower = args.flower
+fNsamp = 1 + tlen*srate//2
+
+nrinj = fastTB.NRInjections(tlen, srate)
+nrinj.set_modes([(2,2),(2,0),(2,-2)])
+wfenv = fastTB.WFEnv(tlen, srate, aLIGOaLIGOO3LowT1800545, f_lower)
+
+bounds = ((40, 300.), (1.,10.), (-0.99, 0.99))
+
+logf = np.log(np.linspace(0, np.pi*srate/8192., fNsamp))
+def make_glitch(f0, gbw):
+    td = FrequencySeries(np.exp(-0.5*gbw*(logf - np.log(f0))**2),
+                            dtype=np.complex128, delta_f=1./tlen, epoch=0)
+    return td.to_frequencyseries().cyclic_time_shift(tlen-2.)
+
+def make_goal(wfglitch, inv=False):
+    def goal(vec):
+        mtot, q, chi = vec
+        tmplt = wfenv.template(mtot, q, chi)
+        if inv:
+            return -wfenv.match(tmplt, wfglitch)
+        else:
+            return wfenv.match(tmplt, wfglitch)
+    return goal
+
+def make_bank():
+    return list(product(*[np.linspace(*bnd, 11) for bnd in bounds]))
+
+bank = make_bank()
+ 
+simlst = []
+for f0 in np.linspace(0.0025, 0.3, 50):
+    for gbw in np.linspace(0.25, 8., 50):
+        simlst.append((f0, gbw))
+
+#from tqdm import tqdm
+
+def process(f0, gbw):
+    wfglitch = make_glitch(f0, gbw)
+    match_func = make_goal(wfglitch)
+    matches = np.array([match_func(line) for line in bank])
+    idx = matches.argmax()
+
+    minim = minimize(make_goal(wfglitch, inv=True),
+                    bank[idx],
+                    bounds=bounds,
+                    method='Nelder-Mead',
+                    options={'maxiter': 1000, 'disp': False})
+
+    mtot, q, chi = minim['x']
+    snr = wfenv.snr(wfglitch)
+    match, tt = wfenv.match(wfenv.template(mtot, q, chi), wfglitch, return_time=True)
+    return np.array((mtot, q, chi, tt, snr, -minim['fun']))
+
+results = Parallel(n_jobs=args.njobs, verbose=10)(delayed(process)(*arg) for arg in simlst)
+#results = [process(*arg) for arg in simlst]
+
+df = pd.DataFrame([(sim[0], sim[1], *res) for sim, res in zip(simlst, results)],
+                        columns=['f0', 'gbw', 'mtotal', 'q', 'chi', 'time', 'snr', 'match'])
+df.to_csv(f"matches/matches_glitchmodel.csv", index=False)
